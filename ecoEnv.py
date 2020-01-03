@@ -412,20 +412,21 @@ class market:
         state.append(self.entities[entityID].work)
 
         # Add other entity commodities to state vector
+        # All entities will see the first same set of entities (for good or bad)
 
         for ent_index in range(len(self.entities)):
 
             if ent_index != entityID:
                 otherEntity = self.entities[ent_index]
-                if isinstance(thisEntity,player):
+                if isinstance(otherEntity,player):
                     state.append(1)
-                elif isinstance(thisEntity,mine):
+                elif isinstance(otherEntity,mine):
                     state.append(2)
-                elif isinstance(thisEntity,forest):
+                elif isinstance(otherEntity,forest):
                     state.append(3)
-                elif isinstance(thisEntity,farm):
+                elif isinstance(otherEntity,farm):
                     state.append(4)
-                elif isinstance(thisEntity,factory):
+                elif isinstance(otherEntity,factory):
                     state.append(5)
 
                 state.append(self.entities[ent_index].metal)
@@ -463,16 +464,19 @@ class market:
 
     def calcMetrics(self):
 
-        self.frame = self.frame + 1
 
-        totalProduction = 0
+        if self.experiment != None:
+            self.frame = self.frame + 1
 
-        for ent in self.entities:
-            totalProduction = totalProduction + ent.rewards_this_turn
+            totalProduction = 0
 
-        ecoUtils.writeMetrics(totalProduction,self.frame,self.experiment)
+            for ent in self.entities:
+                totalProduction = totalProduction + ent.rewards_this_turn
 
-        print(f'Frame: {self.frame}   Production: {totalProduction}')
+            if self.experiment is not None:
+                ecoUtils.writeMetrics(totalProduction, self.frame, self.experiment)
+
+            print(f'Frame: {self.frame}   Production: {totalProduction}')
 
         # Total Production This Round
         # Average Production by Entity Type
