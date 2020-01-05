@@ -48,6 +48,8 @@ class Trainer():
         # self.session_cycle = 0  # the number of training cycles in the current session
 
     def epsilon(self):
+        # TODO Each training run needs to be aware of the starting global frame and additional frames\
+        #  so it can calculate epsilon
         return self.starting_epsilon / (math.exp(self.global_frame * self.epsilon_decay))
 
     def init_weights(self):
@@ -71,44 +73,44 @@ class Trainer():
         entityCount = market.entityCount()
 
         # Get state for each entity's perspective
-        state_0_list = []
-        for entID in range(entityCount):
-            state_0_ent = market.getStateExternal(self.observation_width, entID)
-            state_0_list.append(state_0_ent)
-
-        state_0_list_tensor = self.convertState(state_0_list)
+        state_0 = market.getStateExternal(self.observation_width)
+        state_0_tensor = self.convertState(state_0)
 
         while self.cycle_frame <= self.frames_per_cycle:
 
             # Forward pass on model
-            # TODO rewards_pred_0 should be a list, one for each entity
-            rewards_pred_0 = self.model(state_0_list_tensor)
+            rewards_pred_0 = self.model(state_0_tensor)
 
-            # TODO Need to build action_0_list with the action for each entity
+            # Loop through each entity's predicted reward and build an action vector.  Add it to a list.
+            # action_0 expected to be list of tuples
+            #   First value is the EntityID
+            #   Second is integer between 0 and 19,682
 
-            # initialize action
-            action_0 = torch.zeros([self.action_count], dtype=torch.float32)
+            action_0 = []
+            entID = 0
 
-            # epsilon greedy exploration
-            random_action = random.random() <= self.epsilon()
+            for reward_pred_item in rewards_pred_0:
 
-            # Set action randomly or based on highest reward
-            action_index = [torch.randint(self.model.number_of_actions, torch.Size([]),
-                                          dtype=torch.int) if random_action else torch.argmax(rewards_pred_0)][0]
-            action_0[action_index] = 1
+                # epsilon greedy exploration
+                random_action = random.random() <= self.epsilon()
+
+                if random_action:
+                    action = (entID,random.randint(0,self.model.number_of_actions))
+                else:
+                    action = (entID,torch.argmax(reward_pred_item)[0])
+
+                action_0.append(action)
+
+                entID += 1
 
             # Get next reward and termination
-            # TODO rewards_1 should be a list
             rewards_1, terminal_1 = market.takeActionsExternal(action_0)
 
             # Get next state for each entity's perspective
-            state_1_list = []
-            for entID in range(entityCount):
-                state_1_ent = market.getStateExternal(self.observation_width, entID)
-                state_1_list.append(state_1_ent)
+            state_1 = market.getStateExternal(self.observation_width)
 
             # save transition to replay memory
-            self.replay_memory.append((state_0_list, action_0, rewards_1, state_1_list, terminal_1))
+            self.replay_memory.append((state_0, action_0, rewards_1, state_1, terminal_1))
 
             # if replay memory is full, remove the oldest transition
             if len(self.replay_memory) > self.replay_memory_size:
@@ -119,7 +121,7 @@ class Trainer():
 
             # unpack minibatch
             state_0_batch = torch.cat(tuple(d[0] for d in minibatch))
-            action_0_batch = torch.cat(tuple(d[1] for d in minibatch))
+            action_0_batch = torch.cat(tuple(self.makeOneHotAction(d[1]) for d in minibatch))
             reward_1_batch = torch.cat(tuple(d[2] for d in minibatch))
             state_1_batch = torch.cat(tuple(d[3] for d in minibatch))
 
@@ -160,13 +162,9 @@ class Trainer():
             # else set state to previous state
             if terminal_1:
                 market = ecoEnv.market(None)
-                entityCount = market.entityCount()
-                state_0_list = []
-                for entID in range(entityCount):
-                    state_0_ent = market.getStateExternal(self.observation_width, entID)
-                    state_0_list.append(state_0_ent)
+                state_0 = market.getStateExternal(self.observation_width)
             else:
-                state_0_list = state_1_list
+                state_0 = state_1
 
             self.cycle_frame = self.cycle_frame + 1
 
@@ -176,9 +174,16 @@ class Trainer():
         return avgLoss
 
     def convertState(self,state_list):
-        return torch.tensor(state_list).unsqueeze(0)
+        output = torch.tensor(state_list).unsqueeze(0)
+        output = output.float()
+        return output
 
-class Net(nn.module):
+    def makeOneHotAction(self,action):
+        output = torch.zeros([self.model.number_of_actions], dtype=torch.float32)
+        output[action] = 1
+        return output
+
+class Net(nn.Module):
 
     # This model takes an observation of the environment and predicts a reward for each possible action
 

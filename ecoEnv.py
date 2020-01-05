@@ -228,20 +228,23 @@ class market:
             self.entities.append(x)
         random.shuffle(self.entities)
 
-    def getStateExternal(self,width,entityID):
+    def getStateExternal(self,width):
         # Width indicates the size of the numpy array to return
-        # entityID is the perspective from which to get the state
 
-        state = self.getState(entityID)
-        state = state[:width]
-        missingEntries = max(0, width - len(state))
+        state_list = []
 
-        for count in range(missingEntries):
-            state.append(0.0)
+        for entityID in range(len(self.entities)):
+            # entityID is the perspective from which to get the state
+            state = self.getState(entityID)
+            state = state[:width]
+            missingEntries = max(0, width - len(state))
+            for count in range(missingEntries):
+                state.append(0.0)
+            state_list.append(state)
 
-        state = np.array(state,dtype='float')
+        state_list = np.array(state_list,dtype='float')
 
-        return state
+        return state_list
 
     def takeActionsExternal(self,actionList):
 
@@ -302,6 +305,7 @@ class market:
             else:
                 sell_pick = 0
                 buy_pick = pickCode
+
 
             if workCode < 0:
                 sell_work = -1 * workCode

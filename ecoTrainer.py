@@ -12,5 +12,12 @@ class Orchestrator():
     def learn(self):
         env = ecoModel.Trainer()
         env.init_weights()
+        env.train()
 
 
+def main():
+
+    myOrch = Orchestrator(global_frame_start=0,global_cycle_start=0,cycles_per_session=1)
+    myOrch.learn()
+
+main()
